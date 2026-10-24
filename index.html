@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asmitha M · 3D Decision Network</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0d1117; overflow: hidden; font-family: "Segoe UI", Arial, sans-serif; color: #e6edf3; }
+  canvas { display: block; }
+  #title { position: fixed; top: 18px; left: 0; right: 0; text-align: center; pointer-events: none; padding: 0 16px; }
+  #title h1 { margin: 0; font-size: clamp(18px, 3.2vw, 28px); }
+  #title p { margin: 6px 0 0; color: #8b949e; font-size: clamp(12px, 2vw, 15px); }
+  #legend { position: fixed; bottom: 16px; left: 0; right: 0; display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; font-size: 13px; pointer-events: none; padding: 0 12px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  #hint { position: fixed; bottom: 44px; left: 0; right: 0; text-align: center; color: #8b949e; font-size: 12px; pointer-events: none; }
+  #layer-label { position: fixed; top: 86px; left: 0; right: 0; text-align: center; font-size: 15px; color: #58a6ff; pointer-events: none; min-height: 20px; }
+</style>
+</head>
+<body>
+<div id="title">
+  <h1>When should an AI system compute, act, ask, or defer?</h1>
+  <p>Interactive 3D decision network · Asmitha M</p>
+</div>
+<div id="layer-label"></div>
+<div id="hint">Drag to rotate · Scroll or pinch to zoom · Click a layer</div>
+<div id="legend">
+  <span><span class="dot" style="background:#38bdf8"></span>Input</span>
+  <span><span class="dot" style="background:#818cf8"></span>Features</span>
+  <span><span class="dot" style="background:#c084fc"></span>Uncertainty</span>
+  <span><span class="dot" style="background:#22c55e"></span>Act</span>
+  <span><span class="dot" style="background:#facc15"></span>Ask</span>
+  <span><span class="dot" style="background:#fb923c"></span>Defer</span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  var scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0d1117, 0.018);
+
+  var camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.position.set(0, 7, 24);
+
+  var renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  var controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.8;
+  controls.minDistance = 8;
+  controls.maxDistance = 45;
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+  var p1 = new THREE.PointLight(0x58a6ff, 1.2, 80); p1.position.set(-15, 10, 10); scene.add(p1);
+  var p2 = new THREE.PointLight(0xc084fc, 1.0, 80); p2.position.set(15, -5, 12); scene.add(p2);
+
+  // Stars
+  var starGeo = new THREE.BufferGeometry();
+  var starPos = [];
+  for (var s = 0; s < 700; s++) {
+    starPos.push((Math.random() - 0.5) * 140, (Math.random() - 0.5) * 80, (Math.random() - 0.5) * 140);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  var stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x7dd3fc, size: 0.18, transparent: true, opacity: 0.7 }));
+  scene.add(stars);
+
+  // Network definition
+  var defs = [
+    { name: 'Input: video, text and data',            count: 4, color: 0x38bdf8, x: -10.5 },
+    { name: 'Features: CNN and embeddings',           count: 6, color: 0x818cf8, x: -3.5 },
+    { name: 'Uncertainty: MC Dropout and entropy',    count: 6, color: 0xc084fc, x: 3.5 },
+    { name: 'Decision: Act, Ask or Defer',            count: 3, color: 0x94a3b8, x: 10.5 }
+  ];
+  var outColors = [0x22c55e, 0xfacc15, 0xfb923c];
+
+  var layers = [];
+  var nodeMeshes = [];
+  var planes = [];
+
+  defs.forEach(function (d, li) {
+    var nodes = [];
+    var cols = d.count > 4 ? 3 : (d.count === 4 ? 2 : 3);
+    for (var i = 0; i < d.count; i++) {
+      var y, z;
+      if (d.count === 3) {
+        y = (1 - i) * 3.4; z = 0;
+      } else {
+        var row = Math.floor(i / 2), col = i % 2;
+        var rows = Math.ceil(d.count / 2);
+        y = ((rows - 1) / 2 - row) * 3.2;
+        z = (col - 0.5) * 4.6;
+      }
+      var color = (li === 3) ? outColors[i] : d.color;
+      var mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.55, 24, 24),
+        new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.55, roughness: 0.35, metalness: 0.2 })
+      );
+      mesh.position.set(d.x, y, z);
+      mesh.userData.phase = Math.random() * Math.PI * 2;
+      scene.add(mesh);
+      nodeMeshes.push(mesh);
+      nodes.push(mesh.position);
+    }
+    layers.push(nodes);
+
+    var plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(7.5, 9.5),
+      new THREE.MeshBasicMaterial({ color: d.color, transparent: true, opacity: 0.06, side: THREE.DoubleSide })
+    );
+    plane.rotation.y = Math.PI / 2;
+    plane.position.set(d.x, 0, 0);
+    plane.userData.index = li;
+    scene.add(plane);
+    planes.push(plane);
+  });
+
+  // Edges
+  var edges = [];
+  var linePos = [];
+  for (var g = 0; g < layers.length - 1; g++) {
+    layers[g].forEach(function (a) {
+      layers[g + 1].forEach(function (b) {
+        linePos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        edges.push({ g: g, a: a, b: b });
+      });
+    });
+  }
+  var lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+  scene.add(new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.22 })));
+
+  // Pulses
+  var pulses = [];
+  function newPulse(startLayer) {
+    var options = edges.filter(function (e) { return e.g === startLayer; });
+    var e = options[Math.floor(Math.random() * options.length)];
+    return { edge: e, t: Math.random(), speed: 0.35 + Math.random() * 0.3 };
+  }
+  for (var k = 0; k < 40; k++) {
+    var pu = newPulse(k % (layers.length - 1));
+    pu.mesh = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    scene.add(pu.mesh);
+    pulses.push(pu);
+  }
+
+  // Click a layer to highlight it
+  var raycaster = new THREE.Raycaster();
+  var mouse = new THREE.Vector2();
+  var labelEl = document.getElementById('layer-label');
+  var selected = -1;
+  renderer.domElement.addEventListener('click', function (ev) {
+    mouse.x = (ev.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(ev.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    var hits = raycaster.intersectObjects(planes);
+    if (hits.length) {
+      selected = hits[0].object.userData.index;
+      labelEl.textContent = defs[selected].name;
+    } else {
+      selected = -1;
+      labelEl.textContent = '';
+    }
+  });
+
+  window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  var clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    var dt = clock.getDelta();
+    var t = clock.elapsedTime;
+
+    nodeMeshes.forEach(function (m) {
+      var s = 1 + 0.12 * Math.sin(t * 2 + m.userData.phase);
+      m.scale.set(s, s, s);
+    });
+
+    planes.forEach(function (p, i) {
+      p.material.opacity = (i === selected) ? 0.2 : 0.06;
+    });
+
+    pulses.forEach(function (p) {
+      p.t += dt * p.speed;
+      if (p.t >= 1) {
+        var next = Math.min(p.edge.g + 1, layers.length - 2);
+        var np = newPulse(p.edge.g + 1 < layers.length - 1 ? next : 0);
+        p.edge = np.edge; p.t = 0; p.speed = np.speed;
+      }
+      p.mesh.position.lerpVectors(p.edge.a, p.edge.b, p.t);
+    });
+
+    stars.rotation.y += dt * 0.01;
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+</script>
+</body>
+</html>
